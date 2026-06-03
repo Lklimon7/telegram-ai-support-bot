@@ -43,4 +43,13 @@ app.add_handler(CommandHandler("admin_on", admin_on))
 app.add_handler(CommandHandler("admin_off", admin_off))
 app.add_handler(MessageHandler(filters.TEXT, handle))
 
-app.run_polling()
+import asyncio
+
+async def main():
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling()
+    while True:
+        await asyncio.sleep(3600)
+
+asyncio.run(main())
