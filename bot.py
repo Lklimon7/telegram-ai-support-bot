@@ -2,7 +2,7 @@ import os
 from telegram import Update
 from telegram.ext import Application, MessageHandler, CommandHandler, ContextTypes, filters
 
-BOT_TOKEN = os.getenv("8711495656:AAGj3qM8puS24eAIHf8vJuwvSTl0HCC5ioo")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 admin_mode = False
 
