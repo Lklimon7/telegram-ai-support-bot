@@ -15,7 +15,7 @@ from telegram.ext import (
 
 # ================= CONFIG =================
 
-BOT_TOKEN = "YOUR_BOT_TOKEN"
+BOT_TOKEN = "8711495656:AAEbT3-I_xrTvVeZFkx25FcODdPbgHOVx6A"
 ADMIN_ID = 5196850561  # your telegram id
 
 reply_mode = {}
