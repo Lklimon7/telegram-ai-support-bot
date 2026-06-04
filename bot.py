@@ -14,12 +14,12 @@ from telegram.ext import (
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-# নিজের Telegram numeric ID বসাও
+# নিজের Telegram numeric ID
 ADMIN_ID = 5196850561
 
 admin_mode = False
 
-# ---------------- WEB ----------------
+# ---------- WEB ----------
 
 app = Flask(__name__)
 
@@ -34,33 +34,19 @@ def run_web():
         port=port
     )
 
-# ---------------- COMMANDS ----------------
+# ---------- COMMANDS ----------
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    text = """
-Welcome to Fast Proxy Support 👋
-
-Please explain your issue.
-
-Commands:
-/help
-"""
-
-    await update.message.reply_text(text)
+    await update.message.reply_text(
+        "Welcome 👋\nSend your issue."
+    )
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    text = """
-Available Commands:
-
-/start
-/help
-/admin_on
-/admin_off
-"""
-
-    await update.message.reply_text(text)
+    await update.message.reply_text(
+        "/start\n/help\n/admin_on\n/admin_off"
+    )
 
 async def admin_on(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -88,84 +74,74 @@ async def admin_off(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Admin mode OFF"
     )
 
-# ---------------- REPLIES ----------------
+# ---------- MAIN MESSAGE ----------
 
 async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     global admin_mode
 
+    user = update.effective_user
+    text = update.message.text
+
+    # Forward message to admin
+    forward_text = f"""
+New User Message
+
+User ID: {user.id}
+Name: {user.first_name}
+
+Message:
+{text}
+"""
+
+    await context.bot.send_message(
+        chat_id=ADMIN_ID,
+        text=forward_text
+    )
+
     if admin_mode:
         return
 
-    text = update.message.text.lower()
+    msg = text.lower()
 
-    print(
-        f"USER {update.effective_user.id} : {text}"
-    )
+    if "proxy" in msg:
 
-    if "proxy" in text:
-
-        msg = """
-Proxy problem? Try:
+        reply = """
+Proxy problem?
 
 1. Restart network
 2. Rotate IP
-3. Check package expiry
+3. Check expiry
 4. Try another network
 """
 
-    elif "payment" in text:
+    elif "payment" in msg:
 
-        msg = """
+        reply = """
 Payment issue?
 
-Please send:
-
-• Screenshot
-• Payment method
-• Transaction ID
+Send screenshot
+Transaction ID
 """
 
-    elif "price" in text:
+    elif "ip" in msg:
 
-        msg = """
-Please check package menu
-or contact support.
-"""
-
-    elif "expire" in text or "expired" in text:
-
-        msg = """
-Your package may be expired.
-
-Please renew package.
-"""
-
-    elif "ip" in text:
-
-        msg = """
-Try:
-
-1. Rotate IP
-2. Change network
-3. Reconnect proxy
-"""
-
-    elif "refund" in text:
-
-        msg = """
-Contact support for refund request.
+        reply = """
+Try IP rotate.
+Reconnect proxy.
 """
 
     else:
 
-        msg = """
-Please explain your problem.
+        reply = """
+Please explain your issue clearly.
 """
 
-    await update.message.reply_text(msg)
+    await update.message.reply_text(
+        reply
+    )
 
-# ---------------- MAIN ----------------
+# ---------- MAIN ----------
 
 async def main():
 
