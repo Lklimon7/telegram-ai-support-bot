@@ -15,7 +15,7 @@ from telegram.ext import (
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 # নিজের Telegram numeric ID বসাও
-ADMIN_ID = 123456789
+ADMIN_ID = 5196850561
 
 admin_mode = False
 
