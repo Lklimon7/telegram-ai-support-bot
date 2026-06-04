@@ -1,20 +1,28 @@
 import os
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+import asyncio
+
+from telegram import (
+    Update,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup
+)
+
 from telegram.ext import (
     Application,
     CommandHandler,
     MessageHandler,
     CallbackQueryHandler,
     ContextTypes,
-    filters,
+    filters
 )
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-ADMIN_ID = 5196850561   # replace with your telegram numeric id
+
+ADMIN_ID = 5196850561
 
 reply_mode = {}
 
-# ---------- START ----------
+# ---------------- START ----------------
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -27,16 +35,16 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
 
-"""📌 Commands:
+"""📌 Commands
 
-/start - Start bot
-/help - Commands
-/cancel_reply - Stop reply mode
+/start
+/help
+/cancel_reply
 """
     )
 
 
-async def cancel_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cancel_reply(update: Update, context):
 
     if update.effective_user.id != ADMIN_ID:
         return
@@ -51,7 +59,7 @@ async def cancel_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-# ---------- BUTTON ----------
+# ---------------- REPLY BUTTON ----------------
 
 async def quick_reply(update, context):
 
@@ -74,13 +82,13 @@ async def quick_reply(update, context):
 
 f"""✅ Reply mode ON
 
-🎯 Target User:
+🎯 Target:
 
 `{target}`
 
-📨 Send text/photo now.
+Send text/photo now.
 
-Use /cancel_reply to stop.
+Use /cancel_reply
 """,
 
         parse_mode="Markdown"
@@ -88,7 +96,7 @@ Use /cancel_reply to stop.
     )
 
 
-# ---------- AUTO REPLY ----------
+# ---------------- AUTO REPLY ----------------
 
 def auto_reply(text):
 
@@ -103,18 +111,19 @@ def auto_reply(text):
 3. Check expiry
 4. Try another network"""
 
-    bn_words = [
-        "কি",
-        "vai",
+    bangla_words = [
+
         "ভাই",
+        "কি",
+        "সমস্যা",
         "দাদা",
-        "problem",
-        "help"
+        "vai"
+
     ]
 
     if any(
-        x in t
-        for x in bn_words
+        x in text.lower()
+        for x in bangla_words
     ):
 
         return "📝 সমস্যাটা বিস্তারিত বলুন"
@@ -122,33 +131,33 @@ def auto_reply(text):
     return "📝 Please explain clearly."
 
 
-# ---------- HANDLE ----------
+# ---------------- HANDLE ----------------
 
-async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle(update: Update, context):
 
     user = update.effective_user
 
     text = update.message.text or ""
 
-    # ===== ADMIN REPLY MODE =====
+    # ---------- ADMIN REPLY MODE ----------
 
     if user.id == ADMIN_ID:
 
-        if user.id in reply_mode:
+        if ADMIN_ID in reply_mode:
 
-            target = reply_mode[user.id]
+            target = reply_mode[
+                ADMIN_ID
+            ]
 
             try:
 
                 if update.message.photo:
 
-                    photo = update.message.photo[-1].file_id
-
                     await context.bot.send_photo(
 
                         chat_id=target,
 
-                        photo=photo,
+                        photo=update.message.photo[-1].file_id,
 
                         caption=update.message.caption
 
@@ -166,7 +175,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                         chat_id=target,
 
-                        text=update.message.text
+                        text=text
 
                     )
 
@@ -180,7 +189,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                 await update.message.reply_text(
 
-f"""❌ Send Failed
+f"""❌ Failed
 
 {e}
 """
@@ -188,9 +197,11 @@ f"""❌ Send Failed
 
                 return
 
-    # ===== USER SIDE =====
+    # ---------- USER SIDE ----------
 
-    bot_reply = auto_reply(text)
+    bot_reply = auto_reply(
+        text
+    )
 
     await update.message.reply_text(
         bot_reply
@@ -209,9 +220,10 @@ f"""❌ Send Failed
             )
 
         ]]
+
     )
 
-    admin_text = f"""
+    admin_message = f"""
 
 👤 User:
 
@@ -235,7 +247,7 @@ f"""❌ Send Failed
 
         chat_id=ADMIN_ID,
 
-        text=admin_text,
+        text=admin_message,
 
         parse_mode="Markdown",
 
@@ -244,9 +256,9 @@ f"""❌ Send Failed
     )
 
 
-# ---------- MAIN ----------
+# ---------------- MAIN ----------------
 
-def main():
+async def main():
 
     app = Application.builder().token(
         BOT_TOKEN
@@ -292,11 +304,25 @@ def main():
 
     )
 
-    print("Bot Running...")
+    print(
+        "Bot Running..."
+    )
 
-    app.run_polling()
+    await app.initialize()
+
+    await app.start()
+
+    await app.updater.start_polling()
+
+    while True:
+
+        await asyncio.sleep(
+            3600
+        )
 
 
 if __name__ == "__main__":
 
-    main()
+    asyncio.run(
+        main()
+    )
