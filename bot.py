@@ -14,24 +14,25 @@ from telegram.ext import (
     Application,
     CommandHandler,
     MessageHandler,
-    ContextTypes,
     CallbackQueryHandler,
+    ContextTypes,
     filters
 )
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-ADMIN_ID = 5196850561  # নিজের Telegram numeric ID বসাও
+ADMIN_ID = 5196850561   # নিজের Telegram ID
 
 admin_mode = False
+reply_mode = {}
 
-# ---------- WEB ----------
+# ---------------- WEB ----------------
 
 web = Flask(__name__)
 
 @web.route("/")
 def home():
-    return "Bot Running"
+    return "Running"
 
 def run_web():
 
@@ -47,7 +48,7 @@ def run_web():
         port=port
     )
 
-# ---------- COMMANDS ----------
+# ---------------- COMMANDS ----------------
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -74,15 +75,13 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
 
-        """
-/start
-/help
+"""
 /admin_on
 /admin_off
-/reply USER_ID message
+/cancel_reply
 """
 
-    )
+)
 
 async def admin_on(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -110,67 +109,161 @@ async def admin_off(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Admin mode OFF"
     )
 
-# ---------- QUICK REPLY ----------
+async def cancel_reply(update: Update, context):
 
-async def quick_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id in reply_mode:
+
+        del reply_mode[
+            update.effective_user.id
+        ]
+
+    await update.message.reply_text(
+        "Reply mode OFF"
+    )
+
+# ---------------- REPLY BUTTON ----------------
+
+async def quick_reply(update, context):
 
     query = update.callback_query
 
     await query.answer()
 
-    user_id = query.data.replace(
-        "reply_",
-        ""
+    user_id = int(
+
+        query.data.replace(
+            "reply_",
+            ""
+        )
+
     )
+
+    reply_mode[
+        query.from_user.id
+    ] = user_id
 
     await query.message.reply_text(
 
-        f"/reply {user_id} your_message"
+f"""
+Reply mode ON ✅
 
-    )
+Target User:
 
-# ---------- MANUAL REPLY ----------
+{user_id}
 
-async def reply_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+Now send text/photo.
 
-    if update.effective_user.id != ADMIN_ID:
-        return
+Use /cancel_reply to stop
+"""
 
-    try:
+)
 
-        user_id = int(
-            context.args[0]
-        )
+# ---------------- MAIN HANDLER ----------------
 
-        text = " ".join(
-            context.args[1:]
-        )
-
-        await context.bot.send_message(
-
-            chat_id=user_id,
-
-            text=text
-
-        )
-
-        await update.message.reply_text(
-            "Reply Sent ✅"
-        )
-
-    except Exception as e:
-
-        await update.message.reply_text(
-            f"Failed: {e}"
-        )
-
-# ---------- MAIN MESSAGE ----------
-
-async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle(update: Update, context):
 
     global admin_mode
 
     user = update.effective_user
+
+    full_name = user.full_name
+
+    # -------- ADMIN REPLY MODE --------
+
+    if user.id == ADMIN_ID:
+
+        if user.id in reply_mode:
+
+            target = reply_mode[
+                user.id
+            ]
+
+            # photo
+
+            if update.message.photo:
+
+                file_id = update.message.photo[-1].file_id
+
+                await context.bot.send_photo(
+
+                    chat_id=target,
+
+                    photo=file_id,
+
+                    caption=update.message.caption
+
+                )
+
+                await update.message.reply_text(
+                    "Photo Sent ✅"
+                )
+
+                return
+
+            # text
+
+            if update.message.text:
+
+                await context.bot.send_message(
+
+                    chat_id=target,
+
+                    text=update.message.text
+
+                )
+
+                await update.message.reply_text(
+                    "Reply Sent ✅"
+                )
+
+                return
+
+    # -------- USER PHOTO --------
+
+    if update.message.photo:
+
+        buttons = InlineKeyboardMarkup(
+
+            [[
+
+                InlineKeyboardButton(
+
+                    "Reply",
+
+                    callback_data=f"reply_{user.id}"
+
+                )
+
+            ]]
+
+        )
+
+        file_id = update.message.photo[-1].file_id
+
+        await context.bot.send_photo(
+
+            chat_id=ADMIN_ID,
+
+            photo=file_id,
+
+            caption=f"""
+
+👤 {full_name}
+
+ID:
+
+{user.id}
+
+Photo Received
+""",
+
+            reply_markup=buttons
+
+        )
+
+        return
+
+    # -------- USER TEXT --------
 
     text = update.message.text
 
@@ -184,31 +277,6 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     )
 
-    if admin_mode:
-
-        await context.bot.send_message(
-
-            chat_id=ADMIN_ID,
-
-            text=f"""
-
-Admin Mode
-
-User:
-{user.full_name}
-
-ID:
-{user.id}
-
-{text}
-"""
-
-        )
-
-        return
-
-    # AUTO REPLY
-
     if "proxy" in msg_lower:
 
         if is_bangla:
@@ -219,7 +287,6 @@ Proxy সমস্যা?
 1. Network restart করুন
 2. IP rotate করুন
 3. Expiry check করুন
-4. অন্য network try করুন
 """
 
         else:
@@ -230,38 +297,17 @@ Proxy issue?
 1. Restart network
 2. Rotate IP
 3. Check expiry
-4. Try another network
-"""
-
-    elif "payment" in msg_lower:
-
-        if is_bangla:
-
-            reply = """
-Payment problem?
-
-Screenshot দিন
-Transaction ID দিন
-"""
-
-        else:
-
-            reply = """
-Payment issue?
-
-Send screenshot
-Send transaction ID
 """
 
     else:
 
         if is_bangla:
 
-            reply = "সমস্যাটা বিস্তারিত বলুন।"
+            reply = "সমস্যাটা বিস্তারিত বলুন"
 
         else:
 
-            reply = "Please explain your issue clearly."
+            reply = "Please explain clearly."
 
     await update.message.reply_text(
         reply
@@ -269,57 +315,48 @@ Send transaction ID
 
     buttons = InlineKeyboardMarkup(
 
-        [
+        [[
 
-            [
+            InlineKeyboardButton(
 
-                InlineKeyboardButton(
+                "Reply",
 
-                    "Reply",
+                callback_data=f"reply_{user.id}"
 
-                    callback_data=f"reply_{user.id}"
+            )
 
-                )
-
-            ]
-
-        ]
+        ]]
 
     )
 
-    try:
+    await context.bot.send_message(
 
-        await context.bot.send_message(
+        chat_id=ADMIN_ID,
 
-            chat_id=ADMIN_ID,
+        text=f"""
 
-            text=f"""
 👤 User:
-{user.full_name}
 
-🆔 ID:
-`{user.id}`
+{full_name}
 
-📩 Message:
+ID:
+
+{user.id}
+
+Message:
+
 {text}
 
-🤖 Bot Reply:
+Bot Reply:
+
 {reply}
 """,
 
-            parse_mode="Markdown",
+        reply_markup=buttons
 
-            reply_markup=buttons
+    )
 
-        )
-
-    except Exception as e:
-
-        print(
-            e
-        )
-
-# ---------- MAIN ----------
+# ---------------- MAIN ----------------
 
 async def main():
 
@@ -331,58 +368,58 @@ async def main():
 
     ).start()
 
-    app_bot = Application.builder().token(
+    app = Application.builder().token(
 
         BOT_TOKEN
 
     ).build()
 
-    app_bot.add_handler(
+    app.add_handler(
         CommandHandler(
             "start",
             start
         )
     )
 
-    app_bot.add_handler(
+    app.add_handler(
         CommandHandler(
             "help",
             help_cmd
         )
     )
 
-    app_bot.add_handler(
+    app.add_handler(
         CommandHandler(
             "admin_on",
             admin_on
         )
     )
 
-    app_bot.add_handler(
+    app.add_handler(
         CommandHandler(
             "admin_off",
             admin_off
         )
     )
 
-    app_bot.add_handler(
+    app.add_handler(
         CommandHandler(
-            "reply",
-            reply_cmd
+            "cancel_reply",
+            cancel_reply
         )
     )
 
-    app_bot.add_handler(
+    app.add_handler(
         CallbackQueryHandler(
             quick_reply
         )
     )
 
-    app_bot.add_handler(
+    app.add_handler(
 
         MessageHandler(
 
-            filters.TEXT & ~filters.COMMAND,
+            filters.ALL,
 
             handle
 
@@ -390,11 +427,11 @@ async def main():
 
     )
 
-    await app_bot.initialize()
+    await app.initialize()
 
-    await app_bot.start()
+    await app.start()
 
-    await app_bot.updater.start_polling()
+    await app.updater.start_polling()
 
     while True:
 
