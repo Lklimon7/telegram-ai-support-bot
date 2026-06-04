@@ -3,19 +3,25 @@ import asyncio
 from threading import Thread
 from flask import Flask
 
-from telegram import Update
+from telegram import (
+    Update,
+    ReplyKeyboardMarkup,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton
+)
+
 from telegram.ext import (
     Application,
     CommandHandler,
     MessageHandler,
     ContextTypes,
+    CallbackQueryHandler,
     filters
 )
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-# নিজের Telegram numeric ID বসাও
-ADMIN_ID = 5196850561
+ADMIN_ID = 5196850561  # নিজের Telegram numeric ID বসাও
 
 admin_mode = False
 
@@ -28,7 +34,14 @@ def home():
     return "Bot Running"
 
 def run_web():
-    port = int(os.environ.get("PORT", 10000))
+
+    port = int(
+        os.environ.get(
+            "PORT",
+            10000
+        )
+    )
+
     web.run(
         host="0.0.0.0",
         port=port
@@ -38,16 +51,37 @@ def run_web():
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
+    keyboard = ReplyKeyboardMarkup(
+
+        [
+            ["/help"],
+            ["/admin_on", "/admin_off"]
+        ],
+
+        resize_keyboard=True
+
+    )
+
     await update.message.reply_text(
-        "Welcome 👋 Send your issue."
+
+        "Hello 👋 Send your problem.",
+
+        reply_markup=keyboard
+
     )
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
-        "/admin_on\n"
-        "/admin_off\n"
-        "/reply USER_ID message"
+
+        """
+/start
+/help
+/admin_on
+/admin_off
+/reply USER_ID message
+"""
+
     )
 
 async def admin_on(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -76,6 +110,25 @@ async def admin_off(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Admin mode OFF"
     )
 
+# ---------- QUICK REPLY ----------
+
+async def quick_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    query = update.callback_query
+
+    await query.answer()
+
+    user_id = query.data.replace(
+        "reply_",
+        ""
+    )
+
+    await query.message.reply_text(
+
+        f"/reply {user_id} your_message"
+
+    )
+
 # ---------- MANUAL REPLY ----------
 
 async def reply_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -85,28 +138,33 @@ async def reply_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
 
-        user_id = int(context.args[0])
+        user_id = int(
+            context.args[0]
+        )
 
         text = " ".join(
             context.args[1:]
         )
 
         await context.bot.send_message(
+
             chat_id=user_id,
+
             text=text
+
         )
 
         await update.message.reply_text(
             "Reply Sent ✅"
         )
 
-    except:
+    except Exception as e:
 
         await update.message.reply_text(
-            "Use:\n/reply USER_ID message"
+            f"Failed: {e}"
         )
 
-# ---------- AUTO REPLY ----------
+# ---------- MAIN MESSAGE ----------
 
 async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -118,27 +176,55 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     msg_lower = text.lower()
 
+    is_bangla = any(
+
+        "\u0980" <= ch <= "\u09FF"
+
+        for ch in text
+
+    )
+
     if admin_mode:
 
         await context.bot.send_message(
-            chat_id=ADMIN_ID,
-            text=f"""
-Admin Mode Message
 
-User: {user.first_name}
-ID: {user.id}
+            chat_id=ADMIN_ID,
+
+            text=f"""
+
+Admin Mode
+
+User:
+{user.full_name}
+
+ID:
+{user.id}
 
 {text}
 """
+
         )
 
         return
 
-    # Generate auto reply
+    # AUTO REPLY
 
     if "proxy" in msg_lower:
 
-        reply = """
+        if is_bangla:
+
+            reply = """
+Proxy সমস্যা?
+
+1. Network restart করুন
+2. IP rotate করুন
+3. Expiry check করুন
+4. অন্য network try করুন
+"""
+
+        else:
+
+            reply = """
 Proxy issue?
 
 1. Restart network
@@ -149,61 +235,106 @@ Proxy issue?
 
     elif "payment" in msg_lower:
 
-        reply = """
-Payment issue?
+        if is_bangla:
 
-Send:
+            reply = """
+Payment problem?
 
-• Screenshot
-• Transaction ID
+Screenshot দিন
+Transaction ID দিন
 """
 
-    elif "ip" in msg_lower:
+        else:
 
-        reply = """
-Rotate IP once
-Reconnect proxy
+            reply = """
+Payment issue?
+
+Send screenshot
+Send transaction ID
 """
 
     else:
 
-        reply = """
-Please explain your issue clearly.
-"""
+        if is_bangla:
 
-    # Send auto reply
+            reply = "সমস্যাটা বিস্তারিত বলুন।"
+
+        else:
+
+            reply = "Please explain your issue clearly."
 
     await update.message.reply_text(
         reply
     )
 
-    # Send log to admin
+    buttons = InlineKeyboardMarkup(
 
-    await context.bot.send_message(
-        chat_id=ADMIN_ID,
-        text=f"""
-User: {user.first_name}
-ID: {user.id}
+        [
 
-Message:
+            [
+
+                InlineKeyboardButton(
+
+                    "Reply",
+
+                    callback_data=f"reply_{user.id}"
+
+                )
+
+            ]
+
+        ]
+
+    )
+
+    try:
+
+        await context.bot.send_message(
+
+            chat_id=ADMIN_ID,
+
+            text=f"""
+👤 User:
+{user.full_name}
+
+🆔 ID:
+`{user.id}`
+
+📩 Message:
 {text}
 
-Bot Reply:
+🤖 Bot Reply:
 {reply}
-"""
-    )
+""",
+
+            parse_mode="Markdown",
+
+            reply_markup=buttons
+
+        )
+
+    except Exception as e:
+
+        print(
+            e
+        )
 
 # ---------- MAIN ----------
 
 async def main():
 
     Thread(
+
         target=run_web,
+
         daemon=True
+
     ).start()
 
     app_bot = Application.builder().token(
+
         BOT_TOKEN
+
     ).build()
 
     app_bot.add_handler(
@@ -242,10 +373,21 @@ async def main():
     )
 
     app_bot.add_handler(
-        MessageHandler(
-            filters.TEXT & ~filters.COMMAND,
-            handle
+        CallbackQueryHandler(
+            quick_reply
         )
+    )
+
+    app_bot.add_handler(
+
+        MessageHandler(
+
+            filters.TEXT & ~filters.COMMAND,
+
+            handle
+
+        )
+
     )
 
     await app_bot.initialize()
