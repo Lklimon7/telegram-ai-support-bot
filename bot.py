@@ -14,22 +14,22 @@ from telegram.ext import (
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-# নিজের Telegram numeric ID
-ADMIN_ID = 5196850561
+# নিজের Telegram numeric ID বসাও
+ADMIN_ID = 123456789
 
 admin_mode = False
 
 # ---------- WEB ----------
 
-app = Flask(__name__)
+web = Flask(__name__)
 
-@app.route("/")
+@web.route("/")
 def home():
-    return "Fast Proxy Support Running"
+    return "Bot Running"
 
 def run_web():
     port = int(os.environ.get("PORT", 10000))
-    app.run(
+    web.run(
         host="0.0.0.0",
         port=port
     )
@@ -39,13 +39,15 @@ def run_web():
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
-        "Welcome 👋\nSend your issue."
+        "Welcome 👋 Send your issue."
     )
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
-        "/start\n/help\n/admin_on\n/admin_off"
+        "/admin_on\n"
+        "/admin_off\n"
+        "/reply USER_ID message"
     )
 
 async def admin_on(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -74,40 +76,70 @@ async def admin_off(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Admin mode OFF"
     )
 
-# ---------- MAIN MESSAGE ----------
+# ---------- MANUAL REPLY ----------
+
+async def reply_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    if update.effective_user.id != ADMIN_ID:
+        return
+
+    try:
+
+        user_id = int(context.args[0])
+
+        text = " ".join(
+            context.args[1:]
+        )
+
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=text
+        )
+
+        await update.message.reply_text(
+            "Reply Sent ✅"
+        )
+
+    except:
+
+        await update.message.reply_text(
+            "Use:\n/reply USER_ID message"
+        )
+
+# ---------- AUTO REPLY ----------
 
 async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     global admin_mode
 
     user = update.effective_user
+
     text = update.message.text
 
-    # Forward message to admin
-    forward_text = f"""
-New User Message
-
-User ID: {user.id}
-Name: {user.first_name}
-
-Message:
-{text}
-"""
-
-    await context.bot.send_message(
-        chat_id=ADMIN_ID,
-        text=forward_text
-    )
+    msg_lower = text.lower()
 
     if admin_mode:
+
+        await context.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=f"""
+Admin Mode Message
+
+User: {user.first_name}
+ID: {user.id}
+
+{text}
+"""
+        )
+
         return
 
-    msg = text.lower()
+    # Generate auto reply
 
-    if "proxy" in msg:
+    if "proxy" in msg_lower:
 
         reply = """
-Proxy problem?
+Proxy issue?
 
 1. Restart network
 2. Rotate IP
@@ -115,20 +147,22 @@ Proxy problem?
 4. Try another network
 """
 
-    elif "payment" in msg:
+    elif "payment" in msg_lower:
 
         reply = """
 Payment issue?
 
-Send screenshot
-Transaction ID
+Send:
+
+• Screenshot
+• Transaction ID
 """
 
-    elif "ip" in msg:
+    elif "ip" in msg_lower:
 
         reply = """
-Try IP rotate.
-Reconnect proxy.
+Rotate IP once
+Reconnect proxy
 """
 
     else:
@@ -137,8 +171,26 @@ Reconnect proxy.
 Please explain your issue clearly.
 """
 
+    # Send auto reply
+
     await update.message.reply_text(
         reply
+    )
+
+    # Send log to admin
+
+    await context.bot.send_message(
+        chat_id=ADMIN_ID,
+        text=f"""
+User: {user.first_name}
+ID: {user.id}
+
+Message:
+{text}
+
+Bot Reply:
+{reply}
+"""
     )
 
 # ---------- MAIN ----------
@@ -179,6 +231,13 @@ async def main():
         CommandHandler(
             "admin_off",
             admin_off
+        )
+    )
+
+    app_bot.add_handler(
+        CommandHandler(
+            "reply",
+            reply_cmd
         )
     )
 
