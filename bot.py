@@ -13,7 +13,7 @@ from telegram.ext import (
 )
 
 # ================= CONFIG =================
-BOT_TOKEN = "8711495656:AAEbT3-I_xrTvVeZFkx25FcODdPbgHOVx6A"
+BOT_TOKEN = "8711495656:AAFIiSaIxJno-p5OaOHV2NdbYhTYFWiuMtk"
 ADMIN_ID = 5196850561   # তোমার admin id
 
 reply_mode = {}
