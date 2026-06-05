@@ -1,8 +1,8 @@
 import os
 import asyncio
-from threading import Thread
-from flask import Flask
+import threading
 
+from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -13,111 +13,117 @@ from telegram.ext import (
     filters
 )
 
-# ================= CONFIG =================
-
-BOT_TOKEN = "8711495656:AAEbT3-I_xrTvVeZFkx25FcODdPbgHOVx6A"
-ADMIN_ID = 5196850561  # your telegram id
+BOT_TOKEN = os.getenv("8711495656:AAEbT3-I_xrTvVeZFkx25FcODdPbgHOVx6A")
+ADMIN_ID = 5196850561  # তোমার Admin ID দাও এখানে
 
 reply_mode = {}
-admin_auto = False
 
-# ================= WEB SERVER FOR RENDER =================
+app_web = Flask(__name__)
 
-web = Flask(__name__)
-
-@web.route("/")
+@app_web.route("/")
 def home():
-    return "Bot Running"
+    return "Bot Running ✅"
 
 def run_web():
     port = int(os.environ.get("PORT", 10000))
-    web.run(host="0.0.0.0", port=port)
+    app_web.run(host="0.0.0.0", port=port)
 
-def keep_alive():
-    t = Thread(target=run_web)
-    t.daemon = True
-    t.start()
-
-# ================= COMMANDS =================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Hello 👋 Send your problem."
+        "👋 Hello!\n\nSend your problem.\nTutorial video থাকলে mention করুন."
     )
 
-async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    txt = """
-/start - Start bot
-/help - Commands
-/admin_on - Disable auto reply
-/admin_off - Enable auto reply
-/cancel_reply - Stop reply mode
-"""
-    await update.message.reply_text(txt)
-
-async def admin_on(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global admin_auto
-
-    if update.effective_user.id != ADMIN_ID:
-        return
-
-    admin_auto = True
-    await update.message.reply_text("Admin mode ON ✅")
-
-async def admin_off(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global admin_auto
-
-    if update.effective_user.id != ADMIN_ID:
-        return
-
-    admin_auto = False
-    await update.message.reply_text("Admin mode OFF ✅")
 
 async def cancel_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
+    uid = update.effective_user.id
+
+    if uid != ADMIN_ID:
         return
 
-    reply_mode.pop(ADMIN_ID, None)
+    reply_mode.pop(uid, None)
 
     await update.message.reply_text(
-        "Reply mode OFF ❌"
+        "❌ Reply mode OFF"
     )
 
-# ================= BUTTON =================
 
 async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-
     await query.answer()
 
-    data = query.data
+    if query.from_user.id != ADMIN_ID:
+        return
 
-    if data.startswith("reply_"):
-        uid = int(data.split("_")[1])
+    user_id = int(query.data.replace("reply_", ""))
 
-        reply_mode[ADMIN_ID] = uid
+    reply_mode[ADMIN_ID] = user_id
 
-        await query.message.reply_text(
-            f"Reply mode ON ✅\n\nTarget User:\n{uid}\n\nNow send text/photo.\n\nUse /cancel_reply"
+    await query.message.reply_text(
+        f"✅ Reply mode ON\n\nTarget User:\n{user_id}\n\nNow send text/photo.\n\nUse /cancel_reply"
+    )
+
+
+async def forward_to_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    user = update.effective_user
+    uid = user.id
+    fullname = user.full_name
+
+    msg = update.message.text or ""
+
+    if uid == ADMIN_ID and ADMIN_ID in reply_mode:
+
+        target = reply_mode[ADMIN_ID]
+
+        try:
+            await context.bot.send_message(
+                chat_id=target,
+                text=msg
+            )
+
+            await update.message.reply_text(
+                "✅ Reply Sent"
+            )
+
+        except Exception as e:
+            await update.message.reply_text(
+                f"❌ Failed\n{e}"
+            )
+
+        return
+
+    lower = msg.lower()
+
+    if "proxy" in lower or "kaj kore na" in lower:
+
+        bot_reply = (
+            "🤖 Proxy issue?\n\n"
+            "1. Restart network\n"
+            "2. Rotate IP\n"
+            "3. Check package expiry\n"
+            "4. Try another network\n"
+            "5. Tutorial video থাকলে দেখুন"
         )
 
-# ================= ADMIN FORWARD =================
+    else:
+        bot_reply = "Please explain your issue clearly."
 
-async def send_to_admin(user, msg, bot_reply, context):
+    await update.message.reply_text(bot_reply)
 
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton(
             "Reply",
-            callback_data=f"reply_{user.id}"
+            callback_data=f"reply_{uid}"
         )]
     ])
 
-    text = f"""
+    admin_text = f"""
 👤 User:
-{user.full_name}
+{fullname}
 
 🆔 ID:
-{user.id}
+{uid}
 
 📩 Message:
 {msg}
@@ -129,108 +135,12 @@ async def send_to_admin(user, msg, bot_reply, context):
 
     await context.bot.send_message(
         chat_id=ADMIN_ID,
-        text=text,
+        text=admin_text,
         reply_markup=keyboard
     )
 
-# ================= AUTO REPLY =================
 
-def detect_reply(msg):
-
-    m = msg.lower()
-
-    if "proxy" in m:
-        return """Proxy issue?
-
-1. Restart network
-2. Rotate IP
-3. Check expiry
-4. Try another network"""
-
-    if any(x in m for x in [
-        "hi","hello","hey","oi"
-    ]):
-        return "Please explain clearly."
-
-    bangla = [
-        "ভাই","কাজ","হচ্ছে","না","সমস্যা"
-    ]
-
-    if any(x in msg for x in bangla):
-        return "সমস্যাটা বিস্তারিত বলুন"
-
-    return "Please explain your issue clearly."
-
-# ================= MESSAGE =================
-
-async def message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    global admin_auto
-
-    uid = update.effective_user.id
-
-    # ADMIN REPLY MODE
-
-    if uid == ADMIN_ID and ADMIN_ID in reply_mode:
-
-        target = reply_mode[ADMIN_ID]
-
-        try:
-
-            if update.message.photo:
-
-                file = update.message.photo[-1].file_id
-
-                await context.bot.send_photo(
-                    target,
-                    file,
-                    caption=update.message.caption or ""
-                )
-
-            else:
-
-                await context.bot.send_message(
-                    target,
-                    update.message.text
-                )
-
-            await update.message.reply_text(
-                "Reply Sent ✅"
-            )
-
-        except Exception as e:
-
-            await update.message.reply_text(
-                f"Send Failed ❌\n{e}"
-            )
-
-        return
-
-    if uid == ADMIN_ID:
-        return
-
-    text = update.message.text or ""
-
-    if admin_auto:
-
-        reply = "Support will reply soon."
-
-    else:
-
-        reply = detect_reply(text)
-
-    await update.message.reply_text(reply)
-
-    await send_to_admin(
-        update.effective_user,
-        text,
-        reply,
-        context
-    )
-
-# ================= PHOTO =================
-
-async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     uid = update.effective_user.id
 
@@ -238,79 +148,70 @@ async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         target = reply_mode[ADMIN_ID]
 
-        try:
+        photo = update.message.photo[-1]
 
-            photo_id = update.message.photo[-1].file_id
+        try:
 
             await context.bot.send_photo(
-                target,
-                photo_id,
-                caption=update.message.caption or ""
+                chat_id=target,
+                photo=photo.file_id,
+                caption=update.message.caption
             )
 
             await update.message.reply_text(
-                "Photo Sent ✅"
+                "✅ Photo Sent"
             )
 
         except Exception as e:
 
             await update.message.reply_text(
-                str(e)
+                f"❌ Failed\n{e}"
             )
 
-# ================= MAIN =================
 
 async def main():
 
-    app = Application.builder().token(BOT_TOKEN).build()
+    application = Application.builder().token(BOT_TOKEN).build()
 
-    app.add_handler(CommandHandler(
-        "start", start
-    ))
+    application.add_handler(
+        CommandHandler("start", start)
+    )
 
-    app.add_handler(CommandHandler(
-        "help", help_cmd
-    ))
+    application.add_handler(
+        CommandHandler("cancel_reply", cancel_reply)
+    )
 
-    app.add_handler(CommandHandler(
-        "admin_on", admin_on
-    ))
-
-    app.add_handler(CommandHandler(
-        "admin_off", admin_off
-    ))
-
-    app.add_handler(CommandHandler(
-        "cancel_reply", cancel_reply
-    ))
-
-    app.add_handler(
+    application.add_handler(
         CallbackQueryHandler(button_click)
     )
 
-    app.add_handler(
+    application.add_handler(
         MessageHandler(
             filters.PHOTO,
-            photo
+            photo_handler
         )
     )
 
-    app.add_handler(
+    application.add_handler(
         MessageHandler(
             filters.TEXT & ~filters.COMMAND,
-            message
+            forward_to_admin
         )
     )
 
-    await app.initialize()
-    await app.start()
-    await app.updater.start_polling()
+    await application.initialize()
+    await application.start()
+    await application.updater.start_polling()
 
     while True:
-        await asyncio.sleep(60)
+        await asyncio.sleep(3600)
+
 
 if __name__ == "__main__":
 
-    keep_alive()
+    threading.Thread(
+        target=run_web,
+        daemon=True
+    ).start()
 
     asyncio.run(main())
